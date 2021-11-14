@@ -279,6 +279,8 @@ proc detectAnagrams*(word: string, candidates: seq[string]): seq[string] =
         if test == letters:
             result.add(item)
 ]#
+#[
+# Solution to "Matching Brackets":
 
 const openBrackets = "([{"
 const closeBrackets = ")]}"
@@ -296,7 +298,64 @@ proc isPaired*(input: string): bool =
         elif correct.len == 0 or correct.pop() != chr:
             return false
     result = (correct.len == 0)
+]#
+#[
+proc sumPowers(n,pow: int, base: int = 10): int =
+  var n = n
+  while n > 0:
+    var num = n mod base
+    result += num ^ pow
+    n = n div base
+
+proc isArmstrongNumber*(input: int): bool =
+    var strInput = $input
+    input == sumPowers(input, strInput.len)
+]#
+#[
+# Solution to "Collatz Conjecture"
+
+proc steps*(input: int): int =
+    if input <= 0:
+        raise newException(ValueError, "Only positive integers allowed.")
+    var current = input
+    while current != 1:
+        if (current mod 2) == 0:
+            current = current div 2
+        else:
+            current = (current * 3) + 1
+        result += 1
+]#
+
+# Solution to "Scrabble Score"
+
+const 
+    one: seq[char] = @['A', 'E', 'I', 'O', 'U', 'L', 'N', 'R', 'S', 'T']
+    two: seq[char] = @['D', 'G']
+    three: seq[char] = @['B', 'C', 'M', 'P']
+    four: seq[char] = @['F', 'H', 'V', 'W', 'Y']
+    five: seq[char] = @['K']
+    eight: seq[char] = @['J', 'X']
+    ten: seq[char] = @['Q', 'Z']
+    alpha: seq[char] = one & two & three & four & five & eight & ten
+
+proc score*(input: string): int =
+    var charSeq = toSeq(input.toUpper.items)
+    for i in charSeq:
+        if i in one:
+            result += 1
+        elif i in two:
+            result += 2
+        elif i in three:
+            result += 3
+        elif i in four:
+            result += 4
+        elif i in five:
+            result += 5
+        elif i in eight:
+            result += 8
+        elif i in ten:
+            result += 10
 
 if isMainModule:
-        var word = "([{}({}[])])"
-        echo isPaired(word)
+        var test = ""
+        echo score(test)
